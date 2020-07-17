@@ -25,19 +25,19 @@ class Textbox :
         self.attributes = kwargs
         self.cursorX = len(kwargs.get('text',''))
 
-    def moveFwd(self, _):
+    def moveFwd(self):
         if self.focused and self.cursorX < self.attributes.get('width')-1:
             self.cursorX += 1
 
-    def moveBwd(self, _):
+    def moveBwd(self):
         if self.focused and self.cursorX > 0:
             self.cursorX -= 1
 
-    def moveUp(self, _):
+    def moveUp(self):
         if self.focused and self.cursorY > 0:
             self.cursorY -= 1
 
-    def moveDown(self, _):
+    def moveDown(self):
         if self.focused and self.cursorY < self.attributes.get('height',0)-1:
             self.cursorY += 1
 
@@ -65,7 +65,7 @@ class Textbox :
         if self.focused or self.editting:
             buffer += text[:self.cursorX] + self.attributes.get('cursor_style','') + text[self.cursorX] + style
             if self.cursorX < len(text)-1:
-                buffer += text[self.cursorX+1:] 
+                buffer += text[self.cursorX+1:]
         else:
             buffer += text
         print(buffer, end='')
@@ -73,16 +73,16 @@ class Textbox :
     def text(self):
         return self.attributes.get('text','')
 
-    def focus(self, _):
+    def focus(self):
         self.focused = True
 
-    def unfocus(self, _):
+    def unfocus(self):
         self.focused = False
 
-    def start_edit(self, _):
+    def start_edit(self):
         self.editting = True
 
-    def end_edit(self, _):
+    def end_edit(self):
         self.editting = False
 
     def replace(self, char):
@@ -92,10 +92,10 @@ class Textbox :
         if not self.editing:
             return
         if self.cursorX >= self.attributes.get('width',0):
-            return 
+            return
+        text = self.attributes.get('text','')
+        self.attributes['text'] = text[:self.cursorx] + char + text[self.cursorX+1:]
         self.cursorX +=1
-
-        pass
 
     def append(self, char):
         pass
@@ -140,7 +140,7 @@ if __name__ == '__main__':
             print(term.white_on_black)
             func = callbacks_no_args.get(val,None)
             if func:
-                func(val)
+                func()
             term.clear()
             tb.draw()
 
