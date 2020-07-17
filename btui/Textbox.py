@@ -20,26 +20,30 @@ class Textbox :
     focused  = False
     editting = False
 
-    def __init__(self, attr):
-        self.attributes = attr
-        self.cursorX = len(attr.get('text',''))
-
-    def focus(self): pass
+    def __init__(self, **kwargs):
+        self.attributes = kwargs
+        self.cursorX = len(kwargs.get('text',''))
 
     def moveFwd(self):
-        self.cursorX += 1
+        if self.focused:
+            self.cursorX += 1
 
     def moveBwd(self):
-        self.cursorX -= 1
+        if self.focused and self.cursorX > 0:
+            self.cursorX -= 1
 
     def moveUp(self):
-        self.cursorY -= 1
+        if self.focused and self.cursorY > 0:
+            self.cursorY -= 1
 
     def moveDown(self):
-        self.cursorY += 1
+        if self.focused:
+            self.cursorY += 1
 
     def draw(self) :
         term = self.attributes.get('terminal',None)
+        if term is None:
+            print("No terminal has been detected!!")
         x = self.attributes.get('x',0)
         y = self.attributes.get('y',0)
         text = self.attributes.get('text')
@@ -55,8 +59,10 @@ class Textbox :
         text += ' ' * (self.attributes.get('width') - len(text))
         print(text)
         if self.focused or self.editting:
-            print(term.move_xy(6, 3) + f'cursorX: {self.cursorX}; x: {x}')
-            print(term.move_xy(self.cursorX + x, self.cursorY + y))
+            cx = self.cursorX + x
+            cy = self.cursorY + y
+            print(term.move_xy(6, 3) + f'cX: {cx}; cY: {cy}')
+            print(term.move_xy(cx, cy))
 
     def text(self):
         return self.attributes.get('text','')
@@ -77,16 +83,16 @@ class Textbox :
 if __name__ == '__main__':
     term = Terminal()
     result = ''
-    tb = Textbox({
-            'x'     : 15,
-            'y'     : 5,
-            'width' : 30,
-            'style' : term.black_on_white,
-            'edit_style'  : term.underline + term.black_on_lightgreen,
-            'focus_style' : term.underline + term.black_on_white,
-            'text'     : 'Hello Box',
-            'terminal' : term,
-            })
+    tb = Textbox(
+            x     = 15,
+            y     = 5,
+            width = 30,
+            style = term.black_on_white,
+            edit_style  = term.underline + term.black_on_lightgreen,
+            focus_style = term.underline + term.black_on_white,
+            text     = 'Hello Box',
+            terminal = term,
+            )
 
     with term.fullscreen(), term.cbreak():
         val = ''
@@ -95,17 +101,19 @@ if __name__ == '__main__':
             'f' : tb.focus,
             'h' : tb.moveBwd,
             'l' : tb.moveFwd,
-            'u' : tb.unfocus
+            'u' : tb.unfocus,
+            'k' : tb.moveUp,
+            'j' : tb.moveDown,
         }
         itr = 0
         while val.lower() != 'q':
             print(term.move_xy(0,1) + f'Iteration {itr}')
+            print(term.move_xy(15,0) + f'Read {val}')
             tb.draw()
             itr += 1
             val = term.inkey()
             func = callbacks.get(val,None)
             if func:
-                print(term.move_xy(0,0) + f'Read {val}')
                 func()
 
 
