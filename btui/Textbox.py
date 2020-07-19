@@ -1,3 +1,4 @@
+import blessed
 from blessed import Terminal
 
 class Textbox :
@@ -20,13 +21,15 @@ class Textbox :
     cursorY = 0
     focused  = False
     editting = False
+    replacing = False
+    appending = False
+    focus_hint = None
 
-    def __init__(self, **kwargs):
-        self.attributes = kwargs
-        self.cursorX = len(kwargs.get('text',''))
+    callbacks_normal = {}
+    callbacks_editing = {}
 
     def moveFwd(self):
-        if self.focused and self.cursorX < self.attributes.get('width')-1:
+        if self.focused and self.cursorX < self.attributes.get('width')-1 and self.cursorX < len(self.attributes.get('text',''))-1:
             self.cursorX += 1
 
     def moveBwd(self):
@@ -59,8 +62,14 @@ class Textbox :
         if self.editting:
             style = self.attributes.get('edit_style', self.attributes.get('focus_style', ''))
 
+        if self.focus_hint:
+            buffer += self.focus_hint
+
         buffer += style
         text += ' ' * (self.attributes.get('width') - len(text))
+
+        if self.focus_hint:
+            text = text[2:]
 
         if self.focused or self.editting:
             buffer += text[:self.cursorX] + self.attributes.get('cursor_style','') + text[self.cursorX] + style
@@ -84,28 +93,90 @@ class Textbox :
 
     def end_edit(self):
         self.editting = False
+        self.replacing = False
+        self.appending = False
 
-    def replace(self, char):
-        pass
+    def start_replace(self):
+        self.replacing = True
+        self.start_edit()
+
+    def start_append(self):
+        self.appending = True
+        self.start_edit()
 
     def insert(self, char):
-        if not self.editing:
-            return
-        if self.cursorX >= self.attributes.get('width',0):
-            return
         text = self.attributes.get('text','')
-        self.attributes['text'] = text[:self.cursorx] + char + text[self.cursorX+1:]
+        width = self.attributes.get('width',0)
+        if self.cursorX >= width or self.cursorX >= len(text):
+            return 
+        if len(text) >= self.attributes.get('width',0) and not self.replacing:
+            return
+        if self.replacing:
+            self.attributes['text'] = text[:self.cursorX] + char + text[self.cursorX+1:]
+        elif self.appending:
+            self.attributes['text'] = text[:self.cursorX+1] + char + text[self.cursorX+1:]
+        else:
+            self.attributes['text'] = text[:self.cursorX] + char + text[self.cursorX:]
         self.cursorX +=1
 
-    def append(self, char):
-        pass
+    def set_focus_hint(self,text):
+        self.focus_hint = text
+
+    def delete_char(self):
+        text = self.attributes.get('text','')
+        self.attributes['text'] = text[:self.cursorX] + text[self.cursorX+1:]
+        if self.cursorX >= len(text) - 1:
+            self.cursorX -= 1
+
+    def __init__(self, **kwargs):
+        self.attributes = kwargs
+        self.cursorX = len(kwargs.get('text',''))-1
+        #Define normal mode callbacks:
+        self.callbacks_normal = {
+            'a' : self.start_append,
+            'i' : self.start_edit,
+            'r' : self.start_replace,
+            'f' : self.focus,
+            'h' : self.moveBwd,
+            'l' : self.moveFwd,
+            'u' : self.unfocus,
+            'k' : self.moveUp,
+            'j' : self.moveDown,
+            'x' : self.delete_char,
+        }
+        self.callbacks_editing = {
+            'KEY_ESCAPE' : self.end_edit,
+        }
+
+    def inject_key(self,key):
+        val= ''
+        if key.is_sequence:
+            val = key.name
+        else:
+            val = key
+
+        func = None
+        if not self.editting:
+            func = self.callbacks_normal.get(val, None)
+            if func:
+                func()
+        else:
+            func = self.callbacks_editing.get(val, None)
+            if func:
+                func()
+            else:
+                if not key.is_sequence:
+                    self.insert(key)
 
 
 if __name__ == '__main__':
     term = Terminal()
     result = ''
+    import Label
 
+    print(term.white_on_black)
     with term.fullscreen(), term.cbreak():
+        print(term.white_on_black)
         tb = Textbox(
                 x     = 15,
                 y     = 5,
@@ -118,16 +189,12 @@ if __name__ == '__main__':
                 text     = 'Hello Box',
                 terminal = term,
                 )
+        lb = Label.Label(
+            x = 0,
+            y = term.height-2,
+            text = ''
+        )
         val = ''
-        callbacks_no_args = {
-            'i' : tb.start_edit,
-            'f' : tb.focus,
-            'h' : tb.moveBwd,
-            'l' : tb.moveFwd,
-            'u' : tb.unfocus,
-            'k' : tb.moveUp,
-            'j' : tb.moveDown,
-        }
         itr = 0
         while val.lower() != 'q':
             print(term.white_on_black)
@@ -135,18 +202,36 @@ if __name__ == '__main__':
             print(term.move_xy(0,1) + f'Iteration {itr}', end='')
             print(term.move_xy(15,0) + f'Read {val}')
             tb.draw()
+            lb.print(term)
             itr += 1
             val = term.inkey()
             print(term.white_on_black)
-            func = callbacks_no_args.get(val,None)
-            if func:
-                func()
+            if val == 'f':
+                tb.set_focus_hint(term.bold + term.steelblue4_on_white + "gi" + term.normal)
+                val = term.inkey()
+                if val == 'g': 
+                    tb.set_focus_hint(term.bold + term.darkgray_on_white + "g" + term.steelblue4_on_white  + "i" + term.normal)
+                    tb.draw()
+
+            else:
+                tb.set_focus_hint(None)
+                tb.inject_key(val)
+            if tb.replacing:
+                lb.setText('REPLACE' + term.white_on_black)
+            elif tb.appending:
+                lb.setText('APPEND-' + term.white_on_black)
+            elif tb.editting:
+                lb.setText('INSERT-' + term.white_on_black)
+            else:
+                lb.setText('NORMAL-' + term.white_on_black)
+
             term.clear()
             tb.draw()
+            lb.print(term)
 
 
         ############### TEARDOWN ################
-        print(term.whitei_on_black)
+        print(term.white_on_black)
         result = tb.text()
 
     print(f'Text read: {result}')
